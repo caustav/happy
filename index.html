@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <script defer src="face-api.min.js"></script>
+  <script defer src="script.js"></script>
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .overlay-desc2 {
+      background: rgba(0,0,0,0);
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align:center;
+    }
+
+    .overlay-desc {
+      top: 0;
+      bottom: 0;
+      position: absolute;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+
+    .video-container {
+      position: relative;
+    }
+
+    .status-text {
+      bottom:0;
+      position:absolute;
+      left: 0;
+      right: 0;
+      text-align:center;
+      font-size: 30px;
+    }
+
+    .img-wait2 {
+      position:absolute;
+      bottom:0;
+      top:0;
+    }
+
+    canvas {
+      position: absolute;
+    }
+  </style>
+</head>
+<body>
+<div class="video-container">
+  <video id="video" width="720" height="560" autoplay muted></video>
+  <div class="overlay-desc">
+    <img class='img-wait' src='./assets/wait1.gif'>
+  </div>
+  <div class="status-text">
+    <img class='img-wait' src='./assets/wait1.gif'>
+  </div>
+</div>
+</body>
+</html>

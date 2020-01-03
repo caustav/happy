@@ -54,7 +54,7 @@ function isTimeOut(startTime, currentTime) {
     var ret = false;
     var diff = currentTime - startTime
     var diffInSeconds = Math.floor(diff / 1000);
-    if (diffInSeconds > 15) {
+    if (diffInSeconds > 25) {
         ret = true
         console.log("Image not matched !!!."  + new Date().toUTCString())
         $('.status-text').html("Image not matched !!!.")
@@ -63,17 +63,43 @@ function isTimeOut(startTime, currentTime) {
     return ret
 }
 
+async function getImageFromVideo(canvas) {
+    var canvasMem = document.createElement('canvas');
+    canvasMem.width = canvas.width
+    canvasMem.height = canvas.height;
+    var ctx = canvasMem.getContext('2d')
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    var dataURI = canvasMem.toDataURL('image/jpeg')
+    const img = await faceapi.fetchImage(dataURI)
+    return img
+}
+
 async function readFaceExpression(faceMatcher, canvas) {
     var isHappy = false;
     var isNeutral = false;
+    var hImage
+    var nImage
 
-    var startTime = new Date()
+    var startTime = new Date()    
 
+    var img
     var detection;
+    var isFailed
     while(true) {
-        detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceExpressions()
+        img = await getImageFromVideo(canvas)
+        var detections = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceExpressions()
+        detection = detections[0]
 
+        if (detections.length > 1) {
+            $('.overlay-desc').css('display', 'none')
+            $('.status-text').html("Multiple face detected.")
+            jqVideo.css('opacity', "0")
+            isFailed = true
+            break;
+        }  
+        
         if (isTimeOut(startTime, new Date)) {
+            isFailed = true
             break;
         }
 
@@ -84,17 +110,26 @@ async function readFaceExpression(faceMatcher, canvas) {
 
             if (detection.expressions != undefined &&
                 (detection.expressions.happy || detection.expressions.neutral)) {
+
+                // console.log("H : " + detection.expressions.happy)
+                // console.log("N : " + detection.expressions.neutral)
     
                 if (detection.expressions.happy < detection.expressions.neutral) {
                     isNeutral = true;
+                    nImage = img
     
                 } else if (detection.expressions.happy > detection.expressions.neutral) {
                     isHappy = true;
+                    hImage = img
                 }
             }
 
             if (isNeutral && isHappy) {
-                console.log("Open the connection." + new Date().toUTCString())
+
+                $('.overlay-desc').css('display', 'block')
+                $('.status-text').html("Scanning your image.")
+                jqVideo.css('opacity', "0")
+
                 isHappy = false;
                 isNeutral = false;
                 break;
@@ -102,13 +137,26 @@ async function readFaceExpression(faceMatcher, canvas) {
         }
     }
 
-    $('.overlay-desc').css('display', 'block')
-    $('.status-text').html("Scanning your image.")
-    jqVideo.css('opacity', "0");
+    var faceRecogTimer = setTimeout(async () => {
 
-    setTimeout(async () => {
+        var ret = await isImageIdentical(nImage, hImage, startTime)
+        console.log("faceRecogTimer " + ret)
+        if (ret == false) {
+            $('.overlay-desc').css('display', 'none')
+            $('.status-text').html("Face not matched.")
+            jqVideo.css('opacity', "0")
+            isFailed = true
+        }else {
+            console.log("Open the connection." + new Date().toUTCString())                    
+        }
+
+        if (isFailed) {
+            clearTimeout(faceRecogTimer)
+            return
+        }
+
         while(true) {
-            detection = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor()
+            detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor()
             if (isTimeOut(startTime, new Date)) {
                 break;
             }
@@ -125,6 +173,35 @@ async function readFaceExpression(faceMatcher, canvas) {
             }
         }
     }, 100)
+}
+
+async function isImageIdentical(imgN, imgH, startTime) {
+    var ret = false
+    const descriptions = []
+    var detection
+    while(!detection){
+        if (isTimeOut(startTime, new Date)) {
+            return
+        }
+        detection = await faceapi.detectSingleFace(imgN).withFaceLandmarks().withFaceDescriptor()
+    }    
+    descriptions.push(detection.descriptor)
+    var labeledDescriptors = new faceapi.LabeledFaceDescriptors("kc", descriptions)
+    var faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6)
+    var detectionH
+    while(!detectionH){
+        if (isTimeOut(startTime, new Date)) {
+            return
+        }
+        detectionH = await faceapi.detectSingleFace(imgH).withFaceLandmarks().withFaceDescriptor()
+    }   
+    var result = faceMatcher.findBestMatch(detectionH.descriptor)
+    console.log('isImageIdentical ' + result)
+
+    if (result.distance <= .5) {
+        ret = true
+    }
+    return ret
 }
 
 async function loadLabeledImages() {

@@ -2,6 +2,8 @@ const video = document.getElementById('video')
 
 var jqVideo = $('#video')
 
+var profile
+
 $('body').ready(function () {
     jqVideo.css('opacity', "0");
     $('.overlay-desc').css('display', 'block')
@@ -32,22 +34,33 @@ var readSavedFaceDescriptors = function (userId) {
     });
 }
 
+var readCurrentProfile = function () {
+    return new Promise(function (resolve) {
+        $.get('/happy/current', function (data) {
+            profile = data
+            resolve(data)
+        })
+    });
+}
+
 video.addEventListener('play', () => {
     const canvas = faceapi.createCanvasFromMedia(video)
     $('body').append(canvas)
     const displaySize = { width: video.width, height: video.height }
     faceapi.matchDimensions(canvas, displaySize);
 
-    (async () => {
+    readCurrentProfile().then(()=> {
+        (async () => {
 
-        console.log("1 " + new Date().toUTCString());
+            console.log("1 " + new Date().toUTCString());
 
-        loadAlreadyLabeledImages().then(function (loadAlreadyImages) {
-            faceMatcher = new faceapi.FaceMatcher(loadAlreadyImages, 0.6)
-            console.log("2 " + new Date().toUTCString());
-            readFaceExpression(faceMatcher, canvas)
-        })
-    })();
+            loadAlreadyLabeledImages().then(function (loadAlreadyImages) {
+                faceMatcher = new faceapi.FaceMatcher(loadAlreadyImages, 0.6)
+                console.log("2 " + new Date().toUTCString());
+                readFaceExpression(faceMatcher, canvas)
+            })
+        })();        
+    })
 })
 
 function isTimeOut(startTime, currentTime) {
@@ -118,7 +131,9 @@ async function readFaceExpression(faceMatcher, canvas) {
                     isNeutral = true;
                     nImage = img
     
-                } else if (detection.expressions.happy > detection.expressions.neutral) {
+                } else if ((detection.expressions.happy > detection.expressions.neutral) &&
+                        (detection.expressions.happy - detection.expressions.neutral > .3)){
+
                     isHappy = true;
                     hImage = img
                 }
@@ -132,7 +147,7 @@ async function readFaceExpression(faceMatcher, canvas) {
 
                 isHappy = false;
                 isNeutral = false;
-                break;
+                break
             }
         }
     }
@@ -143,7 +158,7 @@ async function readFaceExpression(faceMatcher, canvas) {
         console.log("faceRecogTimer " + ret)
         if (ret == false) {
             $('.overlay-desc').css('display', 'none')
-            $('.status-text').html("Face not matched.")
+            $('.status-text').html("Face is not matched.")
             jqVideo.css('opacity', "0")
             isFailed = true
         }else {
@@ -156,7 +171,7 @@ async function readFaceExpression(faceMatcher, canvas) {
         }
 
         while(true) {
-            detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor()
+            detection = await faceapi.detectSingleFace(nImage).withFaceLandmarks().withFaceDescriptor()
             if (isTimeOut(startTime, new Date)) {
                 break;
             }
@@ -166,7 +181,7 @@ async function readFaceExpression(faceMatcher, canvas) {
                 if (result.distance <= .5) {
                     console.log("Image matched !!!."  + new Date().toUTCString())
                     $('.overlay-desc').css('display', 'none')
-                    $('.status-text').html("Image is matched.")
+                    $('.status-text').html("Face is matched.")
                     $('video').trigger('pause');
                     break;
                 }
@@ -186,14 +201,22 @@ async function isImageIdentical(imgN, imgH, startTime) {
         detection = await faceapi.detectSingleFace(imgN).withFaceLandmarks().withFaceDescriptor()
     }    
     descriptions.push(detection.descriptor)
-    var labeledDescriptors = new faceapi.LabeledFaceDescriptors("kc", descriptions)
+    var labeledDescriptors = new faceapi.LabeledFaceDescriptors(profile, descriptions)
     var faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6)
     var detectionH
     while(!detectionH){
         if (isTimeOut(startTime, new Date)) {
             return
         }
-        detectionH = await faceapi.detectSingleFace(imgH).withFaceLandmarks().withFaceDescriptor()
+        var detectionsH = await faceapi.detectAllFaces(imgH).withFaceLandmarks().withFaceDescriptors()
+        if (detectionsH.length > 1) {
+            $('.overlay-desc').css('display', 'none')
+            $('.status-text').html("Multiple face detected.")
+            jqVideo.css('opacity', "0")
+            isFailed = true
+            return
+        }
+        detectionH = detectionsH[0]
     }   
     var result = faceMatcher.findBestMatch(detectionH.descriptor)
     console.log('isImageIdentical ' + result)
@@ -204,26 +227,11 @@ async function isImageIdentical(imgN, imgH, startTime) {
     return ret
 }
 
-async function loadLabeledImages() {
-    const labels = ['kc']
-    return Promise.all(
-        labels.map(async label => {
-            const descriptions = []
-            for (let i = 1; i <= 6; i++) {
-                const img = await faceapi.fetchImage(`/images/${label}/${i}.jpg`)
-                const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor()
-                descriptions.push(detection.descriptor)
-            }
-            return new faceapi.LabeledFaceDescriptors(label, descriptions)
-        })
-    )
-}
-
 function loadAlreadyLabeledImages() {
 
     return new Promise(function (resolve) {
 
-        readSavedFaceDescriptors('kc').then(function (faceDescriptors) {
+        readSavedFaceDescriptors(profile).then(function (faceDescriptors) {
 
             var labeledFaceDescriptors = JSON.parse(faceDescriptors)
             var proxydescriptors = [];
@@ -236,7 +244,7 @@ function loadAlreadyLabeledImages() {
                     proxydescriptors.push(fArray)
                 })
             })
-            resolve(new faceapi.LabeledFaceDescriptors("kc", proxydescriptors))
+            resolve(new faceapi.LabeledFaceDescriptors(profile, proxydescriptors))
         })
     })
 }

@@ -3,6 +3,7 @@ const video = document.getElementById('video')
 var jqVideo = $('#video')
 
 var profile
+var detectionN
 
 $('body').ready(function () {
     jqVideo.css('opacity', "0");
@@ -70,7 +71,7 @@ function isTimeOut(startTime, currentTime) {
     if (diffInSeconds > 25) {
         ret = true
         console.log("Image not matched !!!."  + new Date().toUTCString())
-        $('.status-text').html("Image not matched !!!.")
+        $('.status-text').html("Sorry! You are failed to login.")
         $('.overlay-desc').css('display', 'none')
     }
     return ret
@@ -158,34 +159,30 @@ async function readFaceExpression(faceMatcher, canvas) {
         console.log("faceRecogTimer " + ret)
         if (ret == false) {
             $('.overlay-desc').css('display', 'none')
-            $('.status-text').html("Face is not matched.")
+            $('.status-text').html("Sorry! You are failed to login.")
             jqVideo.css('opacity', "0")
             isFailed = true
         }else {
             console.log("Open the connection." + new Date().toUTCString())                    
         }
 
-        if (isFailed) {
+        if (detectionN == undefined || detectionN.descriptor == undefined) {
             clearTimeout(faceRecogTimer)
             return
         }
 
-        while(true) {
-            detection = await faceapi.detectSingleFace(nImage).withFaceLandmarks().withFaceDescriptor()
-            if (isTimeOut(startTime, new Date)) {
-                break;
-            }
-            if (detection && detection.descriptor) {
-                result = faceMatcher.findBestMatch(detection.descriptor)
-                console.log(result.distance)            
-                if (result.distance <= .5) {
-                    console.log("Image matched !!!."  + new Date().toUTCString())
-                    $('.overlay-desc').css('display', 'none')
-                    $('.status-text').html("Face is matched.")
-                    $('video').trigger('pause');
-                    break;
-                }
-            }
+        result = faceMatcher.findBestMatch(detectionN.descriptor)
+        console.log(result.distance)            
+        if (result.distance <= .5) {
+            console.log("Image matched !!!."  + new Date().toUTCString())
+            $('.overlay-desc').css('display', 'none')
+            $('.status-text').html("Face is matched.")
+            $('video').trigger('pause');
+            clearTimeout(faceRecogTimer)
+
+            setTimeout(async () => {
+                window.location.href="http://localhost:8020/landing.html";
+            }, 300)
         }
     }, 100)
 }
@@ -198,8 +195,9 @@ async function isImageIdentical(imgN, imgH, startTime) {
         if (isTimeOut(startTime, new Date)) {
             return
         }
-        detection = await faceapi.detectSingleFace(imgN).withFaceLandmarks().withFaceDescriptor()
+        detection = await faceapi.detectSingleFace(imgN).withFaceLandmarks().withFaceDescriptor()   
     }    
+    detectionN = detection
     descriptions.push(detection.descriptor)
     var labeledDescriptors = new faceapi.LabeledFaceDescriptors(profile, descriptions)
     var faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6)
